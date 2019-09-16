@@ -16,6 +16,9 @@ import java.net.ConnectException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -683,28 +686,81 @@ public class CodewindConnection {
 		checkResult(result, uri, false);
 	}
 
+//	public void requestProjectBind(String name, String path, String language, String projectType)
+//			throws JSONException, IOException {
+//
+//		String endpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" + CoreConstants.APIPATH_PROJECT_BIND;
+//
+//		URI uri = baseUrl.resolve(endpoint);
+//
+//		JSONObject payload = new JSONObject();
+//		payload.put(CoreConstants.KEY_NAME, name);
+//		payload.put(CoreConstants.KEY_PATH, CoreUtil.getContainerPath(path));
+//		payload.put(CoreConstants.KEY_LANGUAGE, language);
+//		if (projectType == null) {
+//			projectType = ProjectType.getTypeFromLanguage(language).getId();
+//		}
+//		if (projectType != null) {
+//			payload.put(CoreConstants.KEY_PROJECT_TYPE, projectType);
+//		}
+//		payload.put(CoreConstants.KEY_AUTO_BUILD, true);
+//
+//		HttpResult result = HttpUtil.post(uri, payload, 300);
+//		checkResult(result, uri, false);
+//		CoreUtil.updateConnection(this);
+//	}
+	
 	public void requestProjectBind(String name, String path, String language, String projectType)
 			throws JSONException, IOException {
 
-		String endpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" + CoreConstants.APIPATH_PROJECT_BIND;
+		String bindStartEndpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" + CoreConstants.APIPATH_PROJECT_REMOTE_BIND_START;
 
-		URI uri = baseUrl.resolve(endpoint);
+		URI bindStartUri = baseUrl.resolve(bindStartEndpoint);
 
-		JSONObject payload = new JSONObject();
-		payload.put(CoreConstants.KEY_NAME, name);
-		payload.put(CoreConstants.KEY_PATH, CoreUtil.getContainerPath(path));
-		payload.put(CoreConstants.KEY_LANGUAGE, language);
+		JSONObject bindStartPayload = new JSONObject();
+		bindStartPayload.put(CoreConstants.KEY_NAME, name);
+		bindStartPayload.put(CoreConstants.KEY_PATH, CoreUtil.getContainerPath(path));
+		bindStartPayload.put(CoreConstants.KEY_LANGUAGE, language);
 		if (projectType == null) {
 			projectType = ProjectType.getTypeFromLanguage(language).getId();
 		}
 		if (projectType != null) {
-			payload.put(CoreConstants.KEY_PROJECT_TYPE, projectType);
+			bindStartPayload.put(CoreConstants.KEY_PROJECT_TYPE, projectType);
 		}
-		payload.put(CoreConstants.KEY_AUTO_BUILD, true);
+		bindStartPayload.put(CoreConstants.KEY_AUTO_BUILD, true);
 
-		HttpResult result = HttpUtil.post(uri, payload, 300);
-		checkResult(result, uri, false);
+		HttpResult bindStartResult = HttpUtil.post(bindStartUri, bindStartPayload, 300);
+		checkResult(bindStartResult, bindStartUri, false);
+		
+		System.err.printf("Response to remote bind start was: %s\n", bindStartResult.response);
+		
+		JSONObject projectInf = new JSONObject(bindStartResult.response);
+		
+		String projectID = projectInf.getString(CoreConstants.KEY_PROJECT_ID);
+		
+		requestUploadsRecursively(projectID, path);
+		
+		String bindEndEndpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" + projectID + "/" + CoreConstants.APIPATH_PROJECT_REMOTE_BIND_END;
+		
+		URI bindEndUri = baseUrl.resolve(bindEndEndpoint);
+		
+		HttpResult bindEndResult = HttpUtil.post(bindEndUri);
+		
+		System.err.printf("Response to remote bind end was: %s\n", bindEndResult.response);
+		
+		checkResult(bindEndResult, bindEndUri, false);
+		
 		CoreUtil.updateConnection(this);
+	}
+	
+	public void requestUploadsRecursively(String projectId, String path)		
+			throws JSONException, IOException {
+		
+		Path basePath = Paths.get(path);
+		Files.walk(basePath).forEach((Path fullPath) -> {
+			Path relative = basePath.relativize(fullPath);
+			System.out.println(fullPath + " -> " + relative);
+		});
 	}
 	
 	public void requestProjectUnbind(String projectID) throws IOException {
