@@ -11,6 +11,7 @@
 
 package org.eclipse.codewind.core.internal.connection;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.URI;
@@ -20,6 +21,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Base64;
+import java.util.Base64.Encoder;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -28,6 +31,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.Deflater;
 
 import org.eclipse.codewind.core.internal.CodewindApplication;
 import org.eclipse.codewind.core.internal.CodewindApplicationFactory;
@@ -753,16 +757,54 @@ public class CodewindConnection {
 		CoreUtil.updateConnection(this);
 	}
 	
-	public void requestUploadsRecursively(String projectId, String path)		
-			throws JSONException, IOException {
-		
+	public void requestUploadsRecursively(String projectId, String path) throws JSONException, IOException {
+
 		Path basePath = Paths.get(path);
 		Files.walk(basePath).forEach((Path fullPath) -> {
 			Path relative = basePath.relativize(fullPath);
-			System.out.println(fullPath + " -> " + relative);
+			try {
+				if (!Files.isDirectory(fullPath)) {
+					requestUpload(projectId, fullPath, relative.toString());
+				}
+			} catch (JSONException | IOException e) {
+				Logger.logError(e);
+			}
 		});
 	}
 	
+	public void requestUpload(String projectId, Path fullPath, String relativePath) throws JSONException, IOException {
+
+		// Read the file and convert the content to JSON.
+		byte[] fileContent = Files.readAllBytes(fullPath);
+		String jsonContent = JSONObject.quote(new String(fileContent, "UTF-8"));
+
+		// zlib compress the content
+		Deflater fileDeflater = new Deflater();
+		fileDeflater.setInput(jsonContent.getBytes("UTF-8"));
+		fileDeflater.finish();
+		byte[] buffer = new byte[fileContent.length];
+		ByteArrayOutputStream compressedStream = new ByteArrayOutputStream(fileContent.length);
+		while (!fileDeflater.finished()) {
+			int bytesCompressed = fileDeflater.deflate(buffer);
+			compressedStream.write(buffer, 0, bytesCompressed);
+		}
+
+		// base64 encode the compressed content
+		Encoder encoder = Base64.getEncoder();
+		String base64Compressed = encoder.encodeToString(compressedStream.toByteArray());
+
+		JSONObject body = new JSONObject();
+		body.put(CoreConstants.KEY_DIRECTORY, false);
+		body.put(CoreConstants.KEY_PATH, relativePath);
+		body.put(CoreConstants.KEY_MSG, base64Compressed);
+
+		String endpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" + projectId + "/"
+				+ CoreConstants.APIPATH_PROJECT_UPLOAD;
+		URI uri = baseUrl.resolve(endpoint);
+		HttpResult result = HttpUtil.put(uri, body, 300);
+		checkResult(result, uri, false);
+	}
+
 	public void requestProjectUnbind(String projectID) throws IOException {
 		String endpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" + projectID + "/" + CoreConstants.APIPATH_PROJECT_UNBIND;
 		URI uri = baseUrl.resolve(endpoint);
