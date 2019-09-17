@@ -462,11 +462,14 @@ public class CodewindConnection {
 	 * Request a build on an application
 	 * @param app The app to build
 	 */
-	public void requestProjectBuild(CodewindApplication app, String action)
-			throws JSONException, IOException {
+	public void requestProjectBuild(CodewindApplication app, String action) throws JSONException, IOException {
 
-		String buildEndpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" 	//$NON-NLS-1$
-				+ app.projectID + "/" 									//$NON-NLS-1$
+		// Synchronise the source by clearing the old version and uploading the latest.
+		requestProjectClear(app);
+		requestUploadsRecursively(app.projectID, app.fullLocalPath.toOSString());
+
+		String buildEndpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" //$NON-NLS-1$
+				+ app.projectID + "/" //$NON-NLS-1$
 				+ CoreConstants.APIPATH_BUILD;
 
 		URI url = baseUrl.resolve(buildEndpoint);
@@ -771,7 +774,24 @@ public class CodewindConnection {
 			}
 		});
 	}
-	
+
+	/**
+	 * Request a clear of the source tree (prior to upload).
+	 * @param app The app to clear
+	 */
+	public void requestProjectClear(CodewindApplication app)
+			throws JSONException, IOException {
+
+		String clearEndpoint = CoreConstants.APIPATH_PROJECT_LIST + "/" 	//$NON-NLS-1$
+				+ app.projectID + "/" 									//$NON-NLS-1$
+				+ CoreConstants.APIPATH_PROJECT_CLEAR;
+
+		URI url = baseUrl.resolve(clearEndpoint);
+
+		// This initiates the build
+		HttpUtil.post(url);
+	}
+
 	public void requestUpload(String projectId, Path fullPath, String relativePath) throws JSONException, IOException {
 
 		// Read the file and convert the content to JSON.

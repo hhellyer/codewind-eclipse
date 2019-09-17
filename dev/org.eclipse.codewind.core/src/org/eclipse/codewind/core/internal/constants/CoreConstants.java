@@ -41,6 +41,7 @@ public class CoreConstants {
 			APIPATH_PROJECT_REMOTE_BIND_START = "remote-bind/start",
 			APIPATH_PROJECT_REMOTE_BIND_END = "remote-bind/end",
 			APIPATH_PROJECT_UPLOAD = "remote-bind/upload",
+			APIPATH_PROJECT_CLEAR = "remote-bind/clear",
 			APIPATH_PROJECT_UNBIND = "unbind",
 			APIPATH_REPOSITORIES = "templates/repositories",
 			APIPATH_BATCH_REPOSITORIES = "batch/" + APIPATH_REPOSITORIES,
